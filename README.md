@@ -1,5 +1,19 @@
 ﻿# Real-Time Data Pipeline - Airline Delay Analysis
 
+## Quick Navigation
+
+### For PC1 (Data Ingestion - Running on this PC)
+- Start here: You're all set! See "Quick Start PC1" section below
+
+### For PC2 (Data Storage & Analytics - Your Friend's PC)
+- **Quick Start:** [PC2_QUICK_START.md](PC2_QUICK_START.md) - Fast 5-step setup
+- **Detailed Checklist:** [PC2_SETUP_CHECKLIST.md](PC2_SETUP_CHECKLIST.md) - Step-by-step verification
+- **Complete Guide:** [PC2_COMPLETE_GUIDE.md](PC2_COMPLETE_GUIDE.md) - Full documentation
+- **Auto-Test:** Run `test_pc2_setup.ps1` after cloning
+
+### For GitHub
+- **Setup Guide:** [GITHUB_SETUP.md](GITHUB_SETUP.md) - How to push and collaborate
+
 ## Project Overview
 This project implements a complete real-time data pipeline for analyzing airline delays using:
 - **Apache NiFi** - Data ingestion and flow generation
@@ -73,29 +87,7 @@ Both PCs must be on the same network or have firewall rules configured:
 - Streamlit: 8501
 
 ## Quick Start
-**For detailed setup instructions:**
-- **PC1 Person:** See [PC1_SETUP.md](PC1_SETUP.md) - Quick setup guide
-- **PC2 Person:** See [PC2_SETUP.md](PC2_SETUP.md) - Quick setup guide
 
-### PC1 (5 minutes)
-```bash
-git clone <repo-url> && cd ynov-pfe
-cp .env.example .env  # Edit with your IPs
-docker-compose --profile pc1 up -d
-python -m venv venv && venv\Scripts\activate
-pip install -r requirements-pc1.txt
-python scripts/nifi_simulator.py
-```
-
-### PC2 (5 minutes)
-```bash
-git clone <repo-url> && cd ynov-pfe
-cp .env.example .env  # Edit with both IPs
-docker-compose --profile pc2 up -d
-python -m venv venv && venv\Scripts\activate
-pip install -r requirements.txt
-python scripts/script1_kafka_to_clickhouse.py
-```
 ### Prerequisites
 - Docker & Docker Compose
 - Python 3.9+

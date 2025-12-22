@@ -93,10 +93,7 @@ cd airline-delay-pipeline
 
 # Copy and configure environment
 cp .env.example .env
-# Edit .env with both PC IPs:
-#   PC_ROLE=PC2
-#   PC1_IP=<friend-ip>
-#   PC2_IP=<your-ip>
+# Edit .env with both PC IPs
 
 # Start only PC2 services
 docker-compose --profile pc2 up -d
@@ -105,14 +102,7 @@ docker-compose --profile pc2 up -d
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-
-# Start consuming from PC1's Kafka
-python scripts/script1_kafka_to_clickhouse.py
 ```
-
-**Quick Setup Guides:**
-- PC1: See [PC1_SETUP.md](PC1_SETUP.md)
-- PC2: See [PC2_SETUP.md](PC2_SETUP.md)
 
 ## How It Works
 
