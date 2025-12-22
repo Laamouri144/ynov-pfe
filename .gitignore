@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Data
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Large CSV files
+*.csv
+!**/sample*.csv
+
+# Project documents (optional - uncomment if you don't want to share)
+# *.pdf
+
+# Models
+models/*.pkl
+models/*.joblib
+models/*.h5
+!models/.gitkeep
+
+# NiFi
+nifi/state/
+nifi/logs/
+
+# Kafka
+kafka/logs/
+
+# ClickHouse data
+clickhouse/data/
+clickhouse/logs/
+
+# MongoDB data
+mongodb/data/
+
+# Temporary files
+*.tmp
+temp/
