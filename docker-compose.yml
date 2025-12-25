@@ -1,11 +1,8 @@
-# Unified Docker Compose - Airline Delay Data Pipeline
-# PC1 runs: zookeeper, kafka, nifi, kafka-ui
-# PC2 runs: clickhouse, mongodb, mongo-express
+# Docker Compose - Airline Delay Data Pipeline
+# Configuration pour un seul PC
 
 services:
-  # ==================== PC1 SERVICES ====================
-  
-  # Zookeeper - Required for Kafka (PC1)
+  # Zookeeper - Required for Kafka
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
@@ -19,10 +16,8 @@ services:
       - zookeeper-logs:/var/lib/zookeeper/log
     networks:
       - airline-network
-    profiles:
-      - pc1
 
-  # Kafka Broker (PC1)
+  # Kafka Broker
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
@@ -34,8 +29,7 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      # Use localhost for internal Docker communication
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://192.168.11.129:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -46,15 +40,13 @@ services:
       - kafka-data:/var/lib/kafka/data
     networks:
       - airline-network
-    profiles:
-      - pc1
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 30s
       timeout: 10s
       retries: 5
 
-  # Apache NiFi (PC1)
+  # Apache NiFi
   nifi:
     image: apache/nifi:1.23.2
     container_name: nifi
@@ -75,18 +67,16 @@ services:
       - nifi-state:/opt/nifi/nifi-current/state
       - nifi-logs:/opt/nifi/nifi-current/logs
       - nifi-conf:/opt/nifi/nifi-current/conf
-      - ./data/raw:/data/raw:ro
+      - ./data:/data
     networks:
       - airline-network
-    profiles:
-      - pc1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/nifi"]
       interval: 30s
       timeout: 10s
       retries: 5
 
-  # Kafka UI - Monitoring (PC1)
+  # Kafka UI - Monitoring
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -100,12 +90,8 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     networks:
       - airline-network
-    profiles:
-      - pc1
 
-  # ==================== PC2 SERVICES ====================
-  
-  # ClickHouse Database (PC2)
+  # ClickHouse Database
   clickhouse:
     image: clickhouse/clickhouse-server:latest
     container_name: clickhouse
@@ -121,8 +107,6 @@ services:
       - ./config/clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - airline-network
-    profiles:
-      - pc2
     ulimits:
       nofile:
         soft: 262144
@@ -133,7 +117,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # MongoDB for Caching (PC2)
+  # MongoDB for Caching
   mongodb:
     image: mongo:7.0
     container_name: mongodb
@@ -147,15 +131,13 @@ services:
       - ./config/mongodb/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     networks:
       - airline-network
-    profiles:
-      - pc2
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 30s
       timeout: 10s
       retries: 5
 
-  # Mongo Express - MongoDB GUI (PC2)
+  # Mongo Express - MongoDB GUI
   mongo-express:
     image: mongo-express:latest
     container_name: mongo-express
@@ -169,11 +151,9 @@ services:
       ME_CONFIG_BASICAUTH_PASSWORD: admin
     networks:
       - airline-network
-    profiles:
-      - pc2
+
 
 volumes:
-  # PC1 volumes
   zookeeper-data:
   zookeeper-logs:
   kafka-data:
@@ -184,8 +164,6 @@ volumes:
   nifi-state:
   nifi-logs:
   nifi-conf:
-  
-  # PC2 volumes
   clickhouse-data:
   clickhouse-logs:
   mongodb-data:

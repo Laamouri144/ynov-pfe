@@ -29,7 +29,7 @@ CLICKHOUSE_USER = os.getenv('CLICKHOUSE_USER', 'default')
 CLICKHOUSE_PASSWORD = os.getenv('CLICKHOUSE_PASSWORD', '')
 CLICKHOUSE_DATABASE = os.getenv('CLICKHOUSE_DATABASE', 'airline_data')
 
-BATCH_SIZE = int(os.getenv('BATCH_SIZE', '1000'))
+BATCH_SIZE = int(os.getenv('BATCH_SIZE', '1'))
 
 # Setup logging
 logger.add("logs/kafka_to_clickhouse.log", rotation="100 MB", retention="10 days")
@@ -73,35 +73,84 @@ class KafkaToClickHouseConsumer:
     def process_message(self, message_value: str) -> Dict:
         """Parse and transform Kafka message"""
         try:
-            data = json.loads(message_value)
+            parsed = json.loads(message_value)
+            
+            # Si le message est un tableau (format NiFi Pretty Print JSON)
+            if isinstance(parsed, list):
+                if len(parsed) == 0:
+                    logger.warning("Received empty array, skipping")
+                    return None
+                
+                # Reconstruire l'objet JSON à partir du format NiFi
+                data = {}
+                for item in parsed:
+                    if isinstance(item, dict):
+                        # Le format est [{"{": "\"key\" : value"}, ...]
+                        for key_str, value_str in item.items():
+                            if key_str.strip() in ['{', '}']:
+                                # Parser la chaîne "key" : value
+                                if value_str and ':' in value_str:
+                                    parts = value_str.split(':', 1)
+                                    key = parts[0].strip().strip('"').strip()
+                                    value = parts[1].strip().strip('"').strip()
+                                    if key:
+                                        data[key] = value
+                
+                if not data:
+                    logger.warning(f"Could not parse array format: {parsed}")
+                    return None
+            else:
+                data = parsed
+            
+            # Helper function to safely convert to int
+            def safe_int(value, default=0):
+                if value == '' or value is None:
+                    return default
+                try:
+                    return int(float(value))
+                except (ValueError, TypeError):
+                    return default
+            
+            # Helper function to safely convert to float
+            def safe_float(value, default=0.0):
+                if value == '' or value is None:
+                    return default
+                try:
+                    return float(value)
+                except (ValueError, TypeError):
+                    return default
             
             # Transform data for ClickHouse
-            return {
-                'id': hash(f"{data['year']}{data['month']}{data['carrier']}{data['airport']}"),
-                'year': int(data.get('year', 0)),
-                'month': int(data.get('month', 0)),
-                'carrier': data.get('carrier', ''),
-                'carrier_name': data.get('carrier_name', ''),
-                'airport': data.get('airport', ''),
-                'airport_name': data.get('airport_name', ''),
-                'arr_flights': int(data.get('arr_flights', 0)),
-                'arr_del15': int(data.get('arr_del15', 0)),
-                'carrier_ct': float(data.get('carrier_ct', 0.0)),
-                'weather_ct': float(data.get('weather_ct', 0.0)),
-                'nas_ct': float(data.get('nas_ct', 0.0)),
-                'security_ct': float(data.get('security_ct', 0.0)),
-                'late_aircraft_ct': float(data.get('late_aircraft_ct', 0.0)),
-                'arr_cancelled': int(data.get('arr_cancelled', 0)),
-                'arr_diverted': int(data.get('arr_diverted', 0)),
-                'arr_delay': int(data.get('arr_delay', 0)),
-                'carrier_delay': int(data.get('carrier_delay', 0)),
-                'weather_delay': int(data.get('weather_delay', 0)),
-                'nas_delay': int(data.get('nas_delay', 0)),
-                'security_delay': int(data.get('security_delay', 0)),
-                'late_aircraft_delay': int(data.get('late_aircraft_delay', 0)),
+            processed = {
+                'year': safe_int(data.get('year', 0)),
+                'month': safe_int(data.get('month', 0)),
+                'carrier': str(data.get('carrier', '')),
+                'carrier_name': str(data.get('carrier_name', '')),
+                'airport': str(data.get('airport', '')),
+                'airport_name': str(data.get('airport_name', '')),
+                'arr_flights': safe_int(data.get('arr_flights', 0)),
+                'arr_del15': safe_int(data.get('arr_del15', 0)),
+                'carrier_ct': safe_float(data.get('carrier_ct', 0.0)),
+                'weather_ct': safe_float(data.get('weather_ct', 0.0)),
+                'nas_ct': safe_float(data.get('nas_ct', 0.0)),
+                'security_ct': safe_float(data.get('security_ct', 0.0)),
+                'late_aircraft_ct': safe_float(data.get('late_aircraft_ct', 0.0)),
+                'arr_cancelled': safe_int(data.get('arr_cancelled', 0)),
+                'arr_diverted': safe_int(data.get('arr_diverted', 0)),
+                'arr_delay': safe_int(data.get('arr_delay', 0)),
+                'carrier_delay': safe_int(data.get('carrier_delay', 0)),
+                'weather_delay': safe_int(data.get('weather_delay', 0)),
+                'nas_delay': safe_int(data.get('nas_delay', 0)),
+                'security_delay': safe_int(data.get('security_delay', 0)),
+                'late_aircraft_delay': safe_int(data.get('late_aircraft_delay', 0)),
             }
+            
+            # Generate ID after processing to avoid hash() issues
+            processed['id'] = abs(hash(f"{processed['year']}{processed['month']}{processed['carrier']}{processed['airport']}"))
+            
+            return processed
         except Exception as e:
-            logger.error(f"Error processing message: {e}, message: {message_value}")
+            logger.error(f"Error processing message: {e}, message: {message_value[:500]}")
             return None
 
     def insert_batch(self):
@@ -155,7 +204,7 @@ class KafkaToClickHouseConsumer:
                     self.batch.append(processed_data)
 
                 # Insert batch when size reached
-                if len(self.batch) >= BATCH_SIZE:
+                if len(self.batch) >= 1:
                     self.insert_batch()
                     self.consumer.commit()
                     logger.info(f"Total records processed: {self.total_processed}")
