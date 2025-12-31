@@ -59,6 +59,8 @@ services:
       - NIFI_CLUSTER_IS_NODE=false
       - SINGLE_USER_CREDENTIALS_USERNAME=admin
       - SINGLE_USER_CREDENTIALS_PASSWORD=adminadminadmin
+      - NIFI_JVM_HEAP_INIT=2g
+      - NIFI_JVM_HEAP_MAX=2g
     volumes:
       - nifi-database:/opt/nifi/nifi-current/database_repository
       - nifi-flowfile:/opt/nifi/nifi-current/flowfile_repository
@@ -117,41 +119,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # MongoDB for Caching
-  mongodb:
-    image: mongo:7.0
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_DATABASE: airline_cache
-    volumes:
-      - mongodb-data:/data/db
-      - mongodb-config:/data/configdb
-      - ./config/mongodb/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
-    networks:
-      - airline-network
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  # Mongo Express - MongoDB GUI
-  mongo-express:
-    image: mongo-express:latest
-    container_name: mongo-express
-    depends_on:
-      - mongodb
-    ports:
-      - "8082:8081"
-    environment:
-      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
-      ME_CONFIG_BASICAUTH_USERNAME: admin
-      ME_CONFIG_BASICAUTH_PASSWORD: admin
-    networks:
-      - airline-network
-
 
 volumes:
   zookeeper-data:
@@ -166,8 +133,6 @@ volumes:
   nifi-conf:
   clickhouse-data:
   clickhouse-logs:
-  mongodb-data:
-  mongodb-config:
 
 networks:
   airline-network:

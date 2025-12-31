@@ -122,6 +122,7 @@ class KafkaToClickHouseConsumer:
             
             # Transform data for ClickHouse
             processed = {
+                'id': str(data.get('id', abs(hash(f"{data.get('year','')}{data.get('month','')}{data.get('carrier','')}{data.get('airport','')}")))),  # Use JSON id or fallback to hash
                 'year': safe_int(data.get('year', 0)),
                 'month': safe_int(data.get('month', 0)),
                 'carrier': str(data.get('carrier', '')),
@@ -144,9 +145,6 @@ class KafkaToClickHouseConsumer:
                 'security_delay': safe_int(data.get('security_delay', 0)),
                 'late_aircraft_delay': safe_int(data.get('late_aircraft_delay', 0)),
             }
-            
-            # Generate ID after processing to avoid hash() issues
-            processed['id'] = abs(hash(f"{processed['year']}{processed['month']}{processed['carrier']}{processed['airport']}"))
             
             return processed
         except Exception as e:

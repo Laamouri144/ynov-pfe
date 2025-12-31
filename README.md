@@ -1,287 +1,151 @@
-﻿# Real-Time Data Pipeline - Airline Delay Analysis
+🎯 COMPLETE NO-CODE GUIDE: Generate 100,000+ Rows in Nifi
+Here are the exact steps for your Nifi team to generate massive, accurate streaming data WITHOUT scripting:
 
-## Quick Navigation
+📊 STEP 1: PREPARE THE TEMPLATE DATA
+Your CSV should have:
+1000+ unique template rows (you have 751, need ~250 more)
+Each row unique combination (airport+carrier+month)
+Add more variation in delay patterns
+Quick Python to expand your template: (I have already executed this for you. The file is at data/Nifi_Templates_1500.csv)
 
-### For PC1 (Data Ingestion - Running on this PC)
-- Start here: You're all set! See "Quick Start PC1" section below
+🔧 STEP 2: NIFI FLOW DESIGN
+Complete Processor Chain:
+[1. GetFile] → [2. SplitText] → [3. UpdateRecord] → [4. DuplicateFlowFile] 
+     ↓
+[5. UpdateRecord] → [6. ValidateRecord] → [7. RouteOnAttribute]
+                               ↓
+                        [8. ConvertRecord] → [9. PublishKafka]
+[!NOTE] I have updated Step 4 to DuplicateFlowFile because GenerateFlowFile creates empty files and breaks the template chain. DuplicateFlowFile correctly multiplies your templates.
 
-### For PC2 (Data Storage & Analytics - Your Friend's PC)
-- **Quick Start:** [PC2_QUICK_START.md](PC2_QUICK_START.md) - Fast 5-step setup
-- **Detailed Checklist:** [PC2_SETUP_CHECKLIST.md](PC2_SETUP_CHECKLIST.md) - Step-by-step verification
-- **Complete Guide:** [PC2_COMPLETE_GUIDE.md](PC2_COMPLETE_GUIDE.md) - Full documentation
-- **Auto-Test:** Run `test_pc2_setup.ps1` after cloning
+⚙️ STEP 3: EXACT PROCESSOR CONFIGURATIONS
+1. GetFile Processor:
+Input Directory: c:\Users\laamo\ynov-pfe\data
+File Filter: Nifi_Templates_1500.csv
+Keep Source File: true
+Polling Interval: 0 sec (load once)
+2. SplitText Processor:
+Line Split Count: 1 (one row per FlowFile)
+Header Line Count: 1 (skip header)
+Header Fragment: true
+3. First UpdateRecord (Template preparation):
+{
+  "base_template_id": "${template_id}",
+  "variation_id": "${UUID():substring(0,8)}",
+  "unique_row_id": "${template_id}_${now():format('yyyyMMddHHmmssSSS')}",
+  
+  // Add some initial randomness
+  "arr_flights_base": "${arr_flights:toNumber()}",
+  "arr_del15_base": "${arr_del15:toNumber()}",
+  "arr_delay_base": "${arr_delay:toNumber()}"
+}
+4. DuplicateFlowFile (Mass generation):
+Number of Copies: 1000  ← KEY: Generate 1000 FlowFiles per template!
+(Replaces GenerateFlowFile to preserve template data)
 
-### For GitHub
-- **Setup Guide:** [GITHUB_SETUP.md](GITHUB_SETUP.md) - How to push and collaborate
+5. UpdateRecord (Apply variations - MOST IMPORTANT):
+{
+  // Unique identifiers
+  "message_id": "${UUID()}",
+  "kafka_key": "${airport}_${carrier}_${now():format('yyyyMMddHHmmssSSS')}",
+  "processing_timestamp": "${now():format('yyyy-MM-dd HH:mm:ss.SSS')}",
+  
+  // Change year to 2025
+  "year": 2025,
+  
+  // Randomize month (1-12)
+  "month": "${random():mod(12):plus(1)}",
+  
+  // Add realistic variations (±15-25%)
+  "arr_flights": "${arr_flights_base:toNumber():multiply(${random():mod(30):plus(85)}):divide(100)}",
+  "arr_del15": "${arr_del15_base:toNumber():multiply(${random():mod(40):plus(80)}):divide(100)}",
+  
+  // Ensure arr_del15 ≤ arr_flights
+  "arr_del15": "${arr_del15:toNumber():min(${arr_flights:toNumber()})}",
+  
+  // Update total delay with variation
+  "arr_delay": "${arr_delay_base:toNumber():multiply(${random():mod(30):plus(85)}):divide(100)}",
+  
+  // Update individual delays proportionally
+  "carrier_delay": "${carrier_delay:toNumber():multiply(${random():mod(30):plus(85)}):divide(100)}",
+  "weather_delay": "${weather_delay:toNumber():multiply(${random():mod(50):plus(75)}):divide(100)}",
+  "nas_delay": "${nas_delay:toNumber():multiply(${random():mod(30):plus(85)}):divide(100)}",
+  "security_delay": "${security_delay:toNumber():multiply(${random():mod(70):plus(65)}):divide(100)}",
+  "late_aircraft_delay": "${late_aircraft_delay:toNumber():multiply(${random():mod(30):plus(85)}):divide(100)}",
+  
+  // Update delay counts (keep rare events rare)
+  "weather_ct": "${weather_ct:toNumber():mod(3)}",  // 0-2 only
+  "security_ct": "${security_ct:toNumber():mod(2)}", // 0-1 only
+  
+  // Sequence tracking
+  "generation_batch": "${now():format('yyyyMMdd')}",
+  "sequence_number": "${now():toNumber()}",
+  
+  // Ensure mathematical consistency (Optional check field)
+  "delay_sum_check": "${carrier_delay:plus(${weather_delay}):plus(${nas_delay}):plus(${security_delay}):plus(${late_aircraft_delay})}"
+}
+6. ValidateRecord (Quality check):
+{
+  "validators": [
+    {
+      "name": "flightConsistency",
+      "expression": "${arr_flights:gt(0):and(${arr_del15:le(${arr_flights})})}"
+    },
+    {
+      "name": "delayRealism", 
+      "expression": "${arr_delay:ge(0):and(${arr_delay:lt(1000000)})}"
+    },
+    {
+      "name": "monthValid",
+      "expression": "${month:ge(1):and(${month:le(12)})}"
+    },
+    {
+      "name": "weatherRare",
+      "expression": "${weather_ct:ge(0):and(${weather_ct:le(3)})}"
+    },
+    {
+      "name": "securityVeryRare",
+      "expression": "${security_ct:ge(0):and(${security_ct:le(1)})}"
+    }
+  ]
+}
+7. RouteOnAttribute:
+Success Route: ${validation.status} == 'valid'
+Failure Route: ${validation.status} != 'valid' → Connect to LogAttribute
+8. ConvertRecord (CSV → JSON):
+Reader: CSVReader (use schema from template)
+Writer: JsonRecordSetWriter
+9. PublishKafka:
+Kafka Brokers: localhost:9092
+Topic: flight_data_stream
+Delivery Guarantee: Best Effort
+Compression Type: snappy
+Batch Size: 500
+⚡ STEP 4: SCALING FOR 100,000+ ROWS
+Tuning for High Volume:
+1. Parallel Processing:
 
-## Project Overview
-This project implements a complete real-time data pipeline for analyzing airline delays using:
-- **Apache NiFi** - Data ingestion and flow generation
-- **Apache Kafka** - Real-time data streaming
-- **ClickHouse** - High-performance columnar database
-- **MongoDB** - Data caching layer
-- **Power BI** - Business intelligence dashboards
-- **Python** - Data processing, ML, and real-time visualization
-- **ML Frameworks** - Spark MLlib, Dask-ML, Scikit-learn
+DuplicateFlowFile: Concurrent Tasks = 10
+UpdateRecord: Concurrent Tasks = 8  
+PublishKafka: Concurrent Tasks = 5
+2. Batch Sizes:
 
-## Dataset
-**Airline Delay Cause Dataset** containing:
-- Flight delays by carrier, airport, and time period
-- Delay categories: carrier, weather, NAS, security, late aircraft
-- Arrival statistics and cancellations
+PublishKafka: Batch Size = 500
+3. Performance Settings:
 
-## Architecture
+Backpressure: 
+  • Max Queue Size = 10000
+  • Swap Threshold = 20000
+  
+Timeouts:
+  • Yield Duration = 1 sec
+  • Run Schedule = 0 sec
+4. Memory Allocation:
 
-```
-┌─────────┐ ┌───────┐ ┌──────────┐ ┌────────────┐
-│ NiFi │───▶│ Kafka │───▶│ Script 1 │───▶│ ClickHouse │
-└─────────┘ └───┬───┘ │ Consumer │ └──────┬─────┘
- │ └──────────┘ │
- │ │
- │ ┌──────────┐ ┌──────▼─────┐
- │ │ Script 2 │◀───│ Power BI │
- │ │ Cache │ └────────────┘
- │ └────┬─────┘
- │ │
- │ ┌────▼─────┐
- └────────▶│ Script 3 │
- │ │ ML Model │
- │ └──────────┘
- │ │
- │ ┌────▼─────┐
- └────────▶│ Streamlit│
- │Dashboard │
- └──────────┘
-```
-
-## Distributed Setup (2 PCs)
-
-### PC 1 (Data Ingestion & Streaming) - Your PC
-**Responsibilities:**
-- Apache NiFi (data flow generation)
-- Apache Kafka broker
-- Script 1: Kafka → ClickHouse consumer
-- Real-time monitoring
-
-**IP Configuration:** Set static IP or use hostname
-
-### PC 2 (Processing & Analytics) - Friend's PC
-**Responsibilities:**
-- ClickHouse database
-- MongoDB cache
-- Script 2: ClickHouse → MongoDB caching
-- Script 3: ML training (Spark/Dask/Scikit-learn)
-- Power BI dashboards
-- Streamlit real-time visualization
-
-**IP Configuration:** Set static IP or use hostname
-
-### Network Configuration
-Both PCs must be on the same network or have firewall rules configured:
-
-**Ports to open:**
-- Kafka: 9092
-- ClickHouse: 8123 (HTTP), 9000 (Native)
-- MongoDB: 27017
-- NiFi: 8080
-- Streamlit: 8501
-
-## Quick Start
-
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.9+
-- Power BI Desktop
-- Network connectivity between PCs
-
-### Setup Instructions
-
-#### On PC 1 (Data Ingestion):
-```bash
-# 1. Clone and navigate to project
-git clone <repository-url>
-cd ynov-pfe
-
-# 2. Set your PC1 IP in .env file
-# Edit .env and set PC1_IP=<your-ip> and PC2_IP=<friend-ip>
-
-# 3. Start PC1 services only (NiFi, Kafka, Zookeeper)
-docker-compose --profile pc1 up -d
-
-# 4. Install Python dependencies
-python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements-pc1.txt
-
-# 5. Run data simulator or NiFi
-python scripts/nifi_simulator.py
-```
-
-#### On PC 2 (Processing & Analytics):
-```bash
-# 1. Clone the same repository
-git clone <repository-url>
-cd ynov-pfe
-
-# 2. Set IPs in .env file
-# Edit .env and set PC1_IP=<friend-ip> and PC2_IP=<your-ip>
-
-# 3. Start PC2 services only (ClickHouse, MongoDB)
-docker-compose --profile pc2 up -d
-
-# 4. Install Python dependencies
-python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-
-# 5. Run data pipeline
-python scripts/script1_kafka_to_clickhouse.py
-
-# 6. Run caching script
-python scripts/script2_clickhouse_to_mongodb.py
-
-# 7. Train ML models (daily)
-python scripts/script3_ml_training.py
-
-# 8. Launch Streamlit dashboard
-streamlit run scripts/streamlit_dashboard.py
-```
-
-## Project Structure
-```
-ynov-pfe/
-├── data/
-│ ├── raw/ # Original dataset
-│ └── processed/ # Processed data
-├── scripts/
-│ ├── script1_kafka_to_clickhouse.py
-│ ├── script2_clickhouse_to_mongodb.py
-│ ├── script3_ml_training.py
-│ └── streamlit_dashboard.py
-├── nifi/
-│ ├── templates/ # NiFi flow templates
-│ └── conf/ # NiFi configuration
-├── config/
-│ ├── clickhouse/ # ClickHouse schemas
-│ └── kafka/ # Kafka topics config
-├── models/ # Saved ML models
-├── notebooks/ # Jupyter notebooks for analysis
-├── docker-compose.yml # Unified Docker config (PC1 + PC2)
-├── .env.example # Environment template
-├── .env # Environment variables (not in git)
-├── requirements-pc1.txt # PC1 Python dependencies
-├── requirements.txt # PC2 Python dependencies
-├── PC1_COMPLETE_GUIDE.md # Detailed PC1 guide
-├── PC2_COMPLETE_GUIDE.md # Detailed PC2 guide
-└── README.md
-```
-
-## Work Division
-
-### Phase 1: Setup (Week 1)
-- **PC1 Person:** NiFi flow creation, Kafka setup
-- **PC2 Person:** ClickHouse schema design, MongoDB setup
-
-### Phase 2: Data Pipeline (Week 2)
-- **PC1 Person:** Script 1 (Kafka consumer)
-- **PC2 Person:** Script 2 (Caching layer)
-
-### Phase 3: Visualization (Week 3)
-- **PC1 Person:** Streamlit real-time dashboard
-- **PC2 Person:** Power BI dashboards
-
-### Phase 4: Machine Learning (Week 4)
-- **Both:** ML implementation (divide frameworks)
- - PC1: Spark MLlib, Dask-ML
- - PC2: Scikit-learn, Performance comparison
-
-### Phase 5: Testing & Optimization (Week 5)
-- **Both:** Integration testing, performance tuning
-
-## Connection Testing
-
-### Test Network Connectivity
-From PC1:
-```bash
-# Test ClickHouse connection
-curl http://<PC2_IP>:8123/ping
-
-# Test MongoDB connection
-mongosh mongodb://<PC2_IP>:27017
-```
-
-From PC2:
-```bash
-# Test Kafka connection
-docker exec -it kafka kafka-broker-api-versions --bootstrap-server <PC1_IP>:9092
-```
-
-## Troubleshooting
-
-### Connection Issues
-1. Check firewall settings on both PCs
-2. Verify both PCs are on same network
-3. Use `ping <PC_IP>` to test basic connectivity
-4. Ensure Docker containers can access host network
-
-### Performance Issues
-1. Monitor resource usage (CPU, RAM, disk)
-2. Adjust batch sizes in Python scripts
-3. Scale Kafka partitions if needed
-4. Use ClickHouse materialized views for aggregations
-
-## Unified Docker Setup
-
-This project uses a single `docker-compose.yml` with **profiles** to separate PC1 and PC2 services:
-
-### Docker Profiles
-- **pc1 profile:** NiFi, Kafka, Zookeeper, Kafka-UI
-- **pc2 profile:** ClickHouse, MongoDB, Mongo-Express
-
-### Running Services
-
-**PC1 - Start only ingestion services:**
-```bash
-docker-compose --profile pc1 up -d
-```
-
-**PC2 - Start only storage services:**
-```bash
-docker-compose --profile pc2 up -d
-```
-
-**View running services:**
-```bash
-docker-compose ps
-```
-
-**Stop services:**
-```bash
-docker-compose --profile pc1 down  # PC1
-docker-compose --profile pc2 down  # PC2
-```
-
-## Next Steps
-1. Review this README
-2. ⬜ Configure network settings
-3. ⬜ Set up Docker on both PCs
-4. ⬜ Configure NiFi flow
-5. ⬜ Create ClickHouse schema
-6. ⬜ Implement Python scripts
-7. ⬜ Build visualizations
-8. ⬜ Train ML models
-9. ⬜ Prepare presentation
-
-## Team Members
-- PC1 (Your Name): Data Ingestion & Streaming
-- PC2 (Friend's Name): Processing & Analytics
-
-## Presentation Tips
-- Demonstrate live data flow
-- Show real-time dashboards updating
-- Present ML model comparisons with metrics
-- Discuss scalability and improvements
-- Explain technical decisions (why ClickHouse vs MySQL)
-
-## License
-Academic Project - YNOV 2025
+JVM Heap Size: 4GB minimum
+Nifi Buffer Size: 1MB
+🎯 STEP 5: GENERATION STRATEGY
+Option A: Burst Generation (Recommended)
+Run for: 5 minutes
+Records per second: ~350
+Total in 5 min: 100,000+ records
+Then: Reduce to 10 records/sec for continuous stream

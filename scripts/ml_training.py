@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
-from pymongo import MongoClient
+import clickhouse_connect
 from loguru import logger
 from dotenv import load_dotenv
 import psutil
@@ -21,9 +21,9 @@ import psutil
 load_dotenv()
 
 # Configuration
-MONGODB_HOST = os.getenv('MONGODB_HOST', 'localhost')
-MONGODB_PORT = int(os.getenv('MONGODB_PORT', '27017'))
-MONGODB_DATABASE = os.getenv('MONGODB_DATABASE', 'airline_cache')
+CLICKHOUSE_HOST = os.getenv('CLICKHOUSE_HOST', 'localhost')
+CLICKHOUSE_PORT = int(os.getenv('CLICKHOUSE_HTTP_PORT', '8123'))
+CLICKHOUSE_DATABASE = os.getenv('CLICKHOUSE_DATABASE', 'airline_data')
 MODEL_PATH = os.getenv('MODEL_PATH', './models')
 
 # Setup logging
@@ -34,7 +34,7 @@ class MLPipelineComparison:
     """Compare ML frameworks for airline delay prediction"""
 
     def __init__(self):
-        self.mongo_client = None
+        self.clickhouse_client = None
         self.data = None
         self.X_train = None
         self.X_test = None
@@ -45,31 +45,45 @@ class MLPipelineComparison:
         # Create model directory
         os.makedirs(MODEL_PATH, exist_ok=True)
         
-        self.initialize_mongodb()
+        self.initialize_clickhouse()
 
-    def initialize_mongodb(self):
-        """Initialize MongoDB connection"""
-        self.mongo_client = MongoClient(f'mongodb://{MONGODB_HOST}:{MONGODB_PORT}/')
-        logger.info(f"MongoDB client initialized: {MONGODB_HOST}:{MONGODB_PORT}")
+    def initialize_clickhouse(self):
+        """Initialize ClickHouse connection"""
+        self.clickhouse_client = clickhouse_connect.get_client(
+            host=CLICKHOUSE_HOST,
+            port=CLICKHOUSE_PORT,
+            database=CLICKHOUSE_DATABASE
+        )
+        logger.info(f"ClickHouse client initialized: {CLICKHOUSE_HOST}:{CLICKHOUSE_PORT}, db={CLICKHOUSE_DATABASE}")
 
-    def load_data_from_mongodb(self):
-        """Load aggregated data from MongoDB"""
-        logger.info("Loading data from MongoDB...")
-        
-        db = self.mongo_client[MONGODB_DATABASE]
-        collection = db['aggregated_delays']
-        
-        # Fetch all documents
-        cursor = collection.find({})
-        data = list(cursor)
-        
-        if not data:
-            raise ValueError("No data found in MongoDB!")
-        
-        # Convert to DataFrame
-        df = pd.DataFrame(data)
-        logger.info(f"Loaded {len(df)} records from MongoDB")
-        
+    def load_data_from_clickhouse(self):
+        """Load aggregated data directly from ClickHouse"""
+        logger.info("Loading aggregated data from ClickHouse...")
+
+        query = """
+        SELECT
+            year,
+            month,
+            sum(arr_flights) AS total_flights,
+            sum(arr_del15) AS total_delayed,
+            sum(arr_cancelled) AS total_cancelled,
+            sum(arr_diverted) AS total_diverted,
+            sum(carrier_delay) AS carrier_delay_minutes,
+            sum(weather_delay) AS weather_delay_minutes,
+            sum(nas_delay) AS nas_delay_minutes,
+            sum(security_delay) AS security_delay_minutes,
+            sum(late_aircraft_delay) AS late_aircraft_delay_minutes,
+            round(sum(arr_del15) * 100.0 / sum(arr_flights), 2) AS delay_percentage
+        FROM flights
+        GROUP BY year, month
+        """
+
+        result = self.clickhouse_client.query(query)
+        if not result.result_rows:
+            raise ValueError("No data returned from ClickHouse!")
+
+        df = pd.DataFrame(result.result_rows, columns=result.column_names)
+        logger.info(f"Loaded {len(df)} aggregated records from ClickHouse")
         return df
 
     def prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -344,7 +358,7 @@ class MLPipelineComparison:
         logger.info("Starting ML Training Pipeline...")
         
         # Load and prepare data
-        raw_data = self.load_data_from_mongodb()
+        raw_data = self.load_data_from_clickhouse()
         prepared_data = self.prepare_features(raw_data)
         self.split_data(prepared_data)
         
