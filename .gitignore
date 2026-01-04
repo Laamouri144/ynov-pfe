@@ -32,7 +32,8 @@ Thumbs.db
 
 # Logs
 *.log
-logs/
+logs/*
+!logs/.gitkeep
 
 # Data
 data/raw/*
@@ -40,9 +41,14 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
-# Large CSV files
-*.csv
-!**/sample*.csv
+# Raw benchmark dataset (optional, large). Templates are tracked separately.
+Airline_Delay_Cause.csv
+
+# Exported samples
+*.ndjson
+
+# NOTE: Do NOT ignore all CSV files.
+# This repo intentionally tracks CSV datasets and templates.
 
 # Project documents (optional - uncomment if you don't want to share)
 # *.pdf

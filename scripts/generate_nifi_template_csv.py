@@ -1,67 +1,95 @@
+import argparse
+from pathlib import Path
+
 import pandas as pd
-import numpy as np
-import os
 
-# Configuration
-INPUT_FILE = r'c:\Users\laamo\ynov-pfe\scripts\Airline_Delay_Cause_Cpt.csv'
-OUTPUT_FILE = r'c:\Users\laamo\ynov-pfe\data\Nifi_Templates_1500.csv'
 
-def generate_templates():
-    print(f"Reading source: {INPUT_FILE}")
-    try:
-        df = pd.read_csv(INPUT_FILE)
-    except FileNotFoundError:
-        print(f"Error: Source file not found at {INPUT_FILE}")
-        return
+def generate_templates(input_path: Path, output_path: Path, count: int, seed: int) -> None:
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
 
-    print("Generating expanded templates...")
-    
-    # Ensure critical columns exist and clean data
-    required_cols = ['year', 'month', 'carrier', 'carrier_name', 'airport', 'airport_name', 
-                     'arr_flights', 'arr_del15', 'arr_delay', 
-                     'carrier_delay', 'weather_delay', 'nas_delay', 'security_delay', 'late_aircraft_delay',
-                     'weather_ct', 'security_ct'] # needed for validators
-    
-    # Fill missing cols with 0 if needed (robustness)
+    df = pd.read_csv(input_path)
+
+    required_cols = [
+        'year', 'month', 'carrier', 'carrier_name', 'airport', 'airport_name',
+        'arr_flights', 'arr_del15', 'arr_delay',
+        'carrier_delay', 'weather_delay', 'nas_delay', 'security_delay', 'late_aircraft_delay',
+        'carrier_ct', 'weather_ct', 'nas_ct', 'security_ct', 'late_aircraft_ct',
+        'arr_cancelled', 'arr_diverted',
+    ]
+
     for col in required_cols:
-        if col not in df.columns and col not in ['year', 'month']: # year/month might be there
+        if col not in df.columns:
             df[col] = 0
 
-    # Clean
     df = df.dropna(subset=['carrier', 'airport'])
-    
-    # We need ~1500 templates. 
-    # Strategy: Take observed valid routes, and create varied templates for them.
-    
-    templates = []
-    
-    # If original DF is small, we replicate. If large, we sample.
-    # The source has 300k+ rows, so we can just sample distinct routes and varied conditions.
-    
-    # 1. Get unique route/month combinations to preserve seasonality basics
-    # But we want to "expand" to ensure we have enough diversity.
-    
-    # Let's take a sample of 2000 rows to be safe, ensuring good mix
-    sample_df = df.sample(n=min(2000, len(df)), random_state=42).copy()
-    
-    # Add a template_id
+    if len(df) == 0:
+        raise ValueError("No valid rows after filtering (missing carrier/airport)")
+
+    target_count = min(count, len(df))
+
+    # Prefer broad airport coverage so downstream visuals (e.g., Power BI filters)
+    # have enough variety. If possible, take at least one row per airport, then
+    # fill the remaining quota with a random sample.
+    airport_count = df['airport'].nunique(dropna=True)
+    if airport_count > 0 and target_count >= airport_count:
+        per_airport = df.groupby('airport', group_keys=False).sample(n=1, random_state=seed)
+        remaining = target_count - len(per_airport)
+        if remaining > 0:
+            filler = df.sample(n=remaining, random_state=seed)
+            sample_df = pd.concat([per_airport, filler], ignore_index=True)
+        else:
+            sample_df = per_airport.reset_index(drop=True)
+    else:
+        sample_df = df.sample(n=target_count, random_state=seed).copy()
+
     sample_df['template_id'] = range(1, len(sample_df) + 1)
-    
-    # 2. Add some variation to the "base" values to make them average templates rather than exact records
-    # This isn't strictly necessary as the NiFi UpdateRecord will apply random variation,
-    # but it helps to have clean "base" numbers.
-    
-    # Ensure they are numeric
-    cols_to_numeric = ['arr_flights', 'arr_del15', 'arr_delay', 'carrier_delay', 'weather_delay', 'nas_delay', 'security_delay', 'late_aircraft_delay']
-    for col in cols_to_numeric:
+
+    numeric_cols = [
+        'arr_flights', 'arr_del15', 'arr_delay',
+        'carrier_delay', 'weather_delay', 'nas_delay', 'security_delay', 'late_aircraft_delay',
+        'carrier_ct', 'weather_ct', 'nas_ct', 'security_ct', 'late_aircraft_ct',
+        'arr_cancelled', 'arr_diverted',
+    ]
+    for col in numeric_cols:
         sample_df[col] = pd.to_numeric(sample_df[col], errors='coerce').fillna(0)
-    
-    # Write to output
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
-    
-    print(f"Writing {len(sample_df)} templates to {OUTPUT_FILE}...")
-    sample_df.to_csv(OUTPUT_FILE, index=False)
-    print("Done.")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    sample_df.to_csv(output_path, index=False)
+
+
+def main() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+
+    parser = argparse.ArgumentParser(
+        description="Generate a NiFi template CSV by sampling from the historical dataset"
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=repo_root / "Airline_Delay_Cause.csv",
+        help="Source CSV (default: Airline_Delay_Cause.csv)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=repo_root / "data" / "Nifi_Templates_1500.csv",
+        help="Output template CSV (default: data/Nifi_Templates_1500.csv)",
+    )
+    parser.add_argument("--count", type=int, default=2000, help="Number of template rows to generate")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    args = parser.parse_args()
+
+    generate_templates(args.input, args.output, args.count, args.seed)
+    try:
+        written_rows = sum(1 for _ in args.output.open('r', encoding='utf-8')) - 1
+    except Exception:
+        written_rows = None
+    if written_rows is None:
+        print(f"Wrote templates to: {args.output}")
+    else:
+        print(f"Wrote {written_rows} template rows to: {args.output}")
+
 
 if __name__ == "__main__":
-    generate_templates()
+    main()

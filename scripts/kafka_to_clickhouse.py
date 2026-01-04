@@ -32,6 +32,7 @@ CLICKHOUSE_DATABASE = os.getenv('CLICKHOUSE_DATABASE', 'airline_data')
 BATCH_SIZE = int(os.getenv('BATCH_SIZE', '1'))
 
 # Setup logging
+os.makedirs("logs", exist_ok=True)
 logger.add("logs/kafka_to_clickhouse.log", rotation="100 MB", retention="10 days")
 
 
@@ -202,7 +203,7 @@ class KafkaToClickHouseConsumer:
                     self.batch.append(processed_data)
 
                 # Insert batch when size reached
-                if len(self.batch) >= 1:
+                if len(self.batch) >= BATCH_SIZE:
                     self.insert_batch()
                     self.consumer.commit()
                     logger.info(f"Total records processed: {self.total_processed}")
