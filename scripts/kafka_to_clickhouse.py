@@ -1,7 +1,7 @@
 """
 Script 1: Kafka to ClickHouse Consumer
 Continuously reads airline delay data from Kafka and inserts into ClickHouse
-Run on PC1
+Run on the machine that has network access to Kafka and ClickHouse
 """
 
 import os
@@ -34,6 +34,11 @@ BATCH_SIZE = int(os.getenv('BATCH_SIZE', '1'))
 # Setup logging
 os.makedirs("logs", exist_ok=True)
 logger.add("logs/kafka_to_clickhouse.log", rotation="100 MB", retention="10 days")
+
+
+UINT8_MAX = 2**8 - 1
+UINT16_MAX = 2**16 - 1
+UINT32_MAX = 2**32 - 1
 
 
 class KafkaToClickHouseConsumer:
@@ -111,40 +116,49 @@ class KafkaToClickHouseConsumer:
                     return int(float(value))
                 except (ValueError, TypeError):
                     return default
+
+            def safe_uint(value, max_value: int, default: int = 0) -> int:
+                v = safe_int(value, default=default)
+                if v < 0:
+                    return 0
+                if v > max_value:
+                    return max_value
+                return v
             
             # Helper function to safely convert to float
             def safe_float(value, default=0.0):
                 if value == '' or value is None:
                     return default
                 try:
-                    return float(value)
+                    v = float(value)
+                    return v if v >= 0 else 0.0
                 except (ValueError, TypeError):
                     return default
             
             # Transform data for ClickHouse
             processed = {
                 'id': str(data.get('id', abs(hash(f"{data.get('year','')}{data.get('month','')}{data.get('carrier','')}{data.get('airport','')}")))),  # Use JSON id or fallback to hash
-                'year': safe_int(data.get('year', 0)),
-                'month': safe_int(data.get('month', 0)),
+                'year': safe_uint(data.get('year', 0), UINT16_MAX),
+                'month': safe_uint(data.get('month', 0), UINT8_MAX),
                 'carrier': str(data.get('carrier', '')),
                 'carrier_name': str(data.get('carrier_name', '')),
                 'airport': str(data.get('airport', '')),
                 'airport_name': str(data.get('airport_name', '')),
-                'arr_flights': safe_int(data.get('arr_flights', 0)),
-                'arr_del15': safe_int(data.get('arr_del15', 0)),
+                'arr_flights': safe_uint(data.get('arr_flights', 0), UINT32_MAX),
+                'arr_del15': safe_uint(data.get('arr_del15', 0), UINT32_MAX),
                 'carrier_ct': safe_float(data.get('carrier_ct', 0.0)),
                 'weather_ct': safe_float(data.get('weather_ct', 0.0)),
                 'nas_ct': safe_float(data.get('nas_ct', 0.0)),
                 'security_ct': safe_float(data.get('security_ct', 0.0)),
                 'late_aircraft_ct': safe_float(data.get('late_aircraft_ct', 0.0)),
-                'arr_cancelled': safe_int(data.get('arr_cancelled', 0)),
-                'arr_diverted': safe_int(data.get('arr_diverted', 0)),
-                'arr_delay': safe_int(data.get('arr_delay', 0)),
-                'carrier_delay': safe_int(data.get('carrier_delay', 0)),
-                'weather_delay': safe_int(data.get('weather_delay', 0)),
-                'nas_delay': safe_int(data.get('nas_delay', 0)),
-                'security_delay': safe_int(data.get('security_delay', 0)),
-                'late_aircraft_delay': safe_int(data.get('late_aircraft_delay', 0)),
+                'arr_cancelled': safe_uint(data.get('arr_cancelled', 0), UINT32_MAX),
+                'arr_diverted': safe_uint(data.get('arr_diverted', 0), UINT32_MAX),
+                'arr_delay': safe_uint(data.get('arr_delay', 0), UINT32_MAX),
+                'carrier_delay': safe_uint(data.get('carrier_delay', 0), UINT32_MAX),
+                'weather_delay': safe_uint(data.get('weather_delay', 0), UINT32_MAX),
+                'nas_delay': safe_uint(data.get('nas_delay', 0), UINT32_MAX),
+                'security_delay': safe_uint(data.get('security_delay', 0), UINT32_MAX),
+                'late_aircraft_delay': safe_uint(data.get('late_aircraft_delay', 0), UINT32_MAX),
             }
             
             return processed

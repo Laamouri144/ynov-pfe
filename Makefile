@@ -2,6 +2,7 @@
 
 PY?=python3
 VENV?=.venv
+PYTHON:=$(shell if [ -x "$(VENV)/bin/python" ]; then echo "$(VENV)/bin/python"; else echo "$(PY)"; fi)
 
 help:
 	@echo "Targets:"
@@ -19,7 +20,7 @@ install:
 	$(VENV)/bin/pip install -r requirements.txt
 
 generate-templates:
-	$(VENV)/bin/python scripts/generate_nifi_template_csv.py --output data/Nifi_Templates_1500.csv
+	$(PYTHON) scripts/generate_nifi_template_csv.py --avg-year --output data/Nifi_Templates_1500.csv
 
 consumer:
-	$(VENV)/bin/python scripts/kafka_to_clickhouse.py
+	$(PYTHON) scripts/kafka_to_clickhouse.py

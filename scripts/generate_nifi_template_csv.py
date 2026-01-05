@@ -76,11 +76,33 @@ def main() -> None:
         default=repo_root / "data" / "Nifi_Templates_1500.csv",
         help="Output template CSV (default: data/Nifi_Templates_1500.csv)",
     )
-    parser.add_argument("--count", type=int, default=2000, help="Number of template rows to generate")
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=2000,
+        help="Number of template rows to generate (ignored if --avg-year is set)",
+    )
+    parser.add_argument(
+        "--avg-year",
+        action="store_true",
+        help="Set template row count to the average rows per year in the source CSV",
+    )
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     args = parser.parse_args()
 
-    generate_templates(args.input, args.output, args.count, args.seed)
+    if args.avg_year:
+        df = pd.read_csv(args.input)
+        years = df['year'].dropna()
+        year_count = int(years.nunique()) if len(years) else 0
+        if year_count > 0:
+            avg_rows = int(round(len(df) / float(year_count)))
+            target_count = max(1, avg_rows)
+        else:
+            target_count = args.count
+    else:
+        target_count = args.count
+
+    generate_templates(args.input, args.output, target_count, args.seed)
     try:
         written_rows = sum(1 for _ in args.output.open('r', encoding='utf-8')) - 1
     except Exception:
