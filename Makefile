@@ -1,4 +1,4 @@
-.PHONY: help venv install generate-templates consumer
+.PHONY: help venv install generate-templates consumer streamlit
 
 PY?=python3
 VENV?=.venv
@@ -10,6 +10,7 @@ help:
 	@echo "  install           Install python dependencies"
 	@echo "  generate-templates Generate data/Nifi_Templates_1500.csv"
 	@echo "  consumer          Run Kafka->ClickHouse consumer"
+	@echo "  streamlit         Run real-time Streamlit dashboard"
 
 venv:
 	$(PY) -m venv $(VENV)
@@ -24,3 +25,6 @@ generate-templates:
 
 consumer:
 	$(PYTHON) scripts/kafka_to_clickhouse.py
+
+streamlit:
+	$(PYTHON) -m streamlit run visualization/realtime_app.py --server.port 8501 --server.address 0.0.0.0

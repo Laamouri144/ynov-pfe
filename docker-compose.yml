@@ -16,6 +16,11 @@ services:
       - zookeeper-logs:/var/lib/zookeeper/log
     networks:
       - airline-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Kafka Broker
   kafka:
@@ -40,6 +45,11 @@ services:
       - kafka-data:/var/lib/kafka/data
     networks:
       - airline-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 30s
@@ -72,6 +82,11 @@ services:
       - ./data:/data
     networks:
       - airline-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/nifi"]
       interval: 30s
@@ -92,6 +107,11 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     networks:
       - airline-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ClickHouse Database
   clickhouse:
@@ -118,7 +138,40 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # Streamlit - Real-time dashboard (ClickHouse + Kafka)
+  streamlit:
+    image: python:3.11-slim
+    container_name: streamlit
+    depends_on:
+      - kafka
+      - clickhouse
+    working_dir: /app
+    volumes:
+      - ./:/app
+    ports:
+      - "8501:8501"
+    environment:
+      KAFKA_HOST: kafka
+      KAFKA_PORT: "29092"
+      KAFKA_TOPIC: airline-delays
+      STREAMLIT_KAFKA_GROUP_ID: airline-streamlit-ui
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: "8123"
+      CLICKHOUSE_DATABASE: airline_data
+    command: sh -c "pip install -r requirements-streamlit.txt && streamlit run visualization/realtime_app.py --server.port 8501 --server.address 0.0.0.0"
+    networks:
+      - airline-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   zookeeper-data:

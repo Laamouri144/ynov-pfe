@@ -43,6 +43,26 @@ make generate-templates
 make consumer
 ```
 
+6) Real-time visualization (Python / Streamlit)
+
+This dashboard combines:
+- ClickHouse (aggregations + latest ingested records)
+- Live Kafka messages consumed directly by the UI (buffered in-memory)
+
+Run locally:
+
+```bash
+make streamlit
+```
+
+Run inside the stack:
+
+```bash
+docker compose up -d streamlit
+```
+
+Then open http://localhost:8501
+
 **Docs**
 - docs/ARCHITECTURE.md
 - docs/RUNBOOK.md
