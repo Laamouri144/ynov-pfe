@@ -1,0 +1,9 @@
+streamlit>=1.31
+streamlit-autorefresh>=1.0.1
+pandas>=2.1
+numpy>=1.26
+plotly>=5.18
+clickhouse-connect>=0.7
+kafka-python>=2.0
+python-dotenv>=1.0
+loguru>=0.7
