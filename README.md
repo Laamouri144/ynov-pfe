@@ -1,287 +1,68 @@
-﻿# Real-Time Data Pipeline - Airline Delay Analysis
+# Airline Delays Streaming (NiFi  Kafka  ClickHouse  Power BI)
 
-## Quick Navigation
+This repository contains a pipeline to generate and stream airline delay data (NiFi  Kafka), load it into ClickHouse, and visualize it in Power BI.
 
-### For PC1 (Data Ingestion - Running on this PC)
-- Start here: You're all set! See "Quick Start PC1" section below
+Note: each streamed JSON record represents an aggregated observation (multiple flights), not a single flight. Fields like `arr_flights`, `arr_del15`, and the cause count fields (`*_ct`) are therefore expected to be larger than small per-flight thresholds.
 
-### For PC2 (Data Storage & Analytics - Your Friend's PC)
-- **Quick Start:** [PC2_QUICK_START.md](PC2_QUICK_START.md) - Fast 5-step setup
-- **Detailed Checklist:** [PC2_SETUP_CHECKLIST.md](PC2_SETUP_CHECKLIST.md) - Step-by-step verification
-- **Complete Guide:** [PC2_COMPLETE_GUIDE.md](PC2_COMPLETE_GUIDE.md) - Full documentation
-- **Auto-Test:** Run `test_pc2_setup.ps1` after cloning
+**Project structure**
+- `nifi/flows/`: NiFi flow exports to import in the NiFi UI
+- `data/`: datasets and templates (including `data/Nifi_Templates_1500.csv`)
+- `scripts/`: Python utilities (Kafka  ClickHouse consumer, template generator)
+- `config/clickhouse/init.sql`: ClickHouse schema initialization
+- `docs/`: documentation and runbooks
 
-### For GitHub
-- **Setup Guide:** [GITHUB_SETUP.md](GITHUB_SETUP.md) - How to push and collaborate
+**Quick start**
 
-## Project Overview
-This project implements a complete real-time data pipeline for analyzing airline delays using:
-- **Apache NiFi** - Data ingestion and flow generation
-- **Apache Kafka** - Real-time data streaming
-- **ClickHouse** - High-performance columnar database
-- **MongoDB** - Data caching layer
-- **Power BI** - Business intelligence dashboards
-- **Python** - Data processing, ML, and real-time visualization
-- **ML Frameworks** - Spark MLlib, Dask-ML, Scikit-learn
+1) Start the stack
 
-## Dataset
-**Airline Delay Cause Dataset** containing:
-- Flight delays by carrier, airport, and time period
-- Delay categories: carrier, weather, NAS, security, late aircraft
-- Arrival statistics and cancellations
-
-## Architecture
-
-```
-┌─────────┐ ┌───────┐ ┌──────────┐ ┌────────────┐
-│ NiFi │───▶│ Kafka │───▶│ Script 1 │───▶│ ClickHouse │
-└─────────┘ └───┬───┘ │ Consumer │ └──────┬─────┘
- │ └──────────┘ │
- │ │
- │ ┌──────────┐ ┌──────▼─────┐
- │ │ Script 2 │◀───│ Power BI │
- │ │ Cache │ └────────────┘
- │ └────┬─────┘
- │ │
- │ ┌────▼─────┐
- └────────▶│ Script 3 │
- │ │ ML Model │
- │ └──────────┘
- │ │
- │ ┌────▼─────┐
- └────────▶│ Streamlit│
- │Dashboard │
- └──────────┘
-```
-
-## Distributed Setup (2 PCs)
-
-### PC 1 (Data Ingestion & Streaming) - Your PC
-**Responsibilities:**
-- Apache NiFi (data flow generation)
-- Apache Kafka broker
-- Script 1: Kafka → ClickHouse consumer
-- Real-time monitoring
-
-**IP Configuration:** Set static IP or use hostname
-
-### PC 2 (Processing & Analytics) - Friend's PC
-**Responsibilities:**
-- ClickHouse database
-- MongoDB cache
-- Script 2: ClickHouse → MongoDB caching
-- Script 3: ML training (Spark/Dask/Scikit-learn)
-- Power BI dashboards
-- Streamlit real-time visualization
-
-**IP Configuration:** Set static IP or use hostname
-
-### Network Configuration
-Both PCs must be on the same network or have firewall rules configured:
-
-**Ports to open:**
-- Kafka: 9092
-- ClickHouse: 8123 (HTTP), 9000 (Native)
-- MongoDB: 27017
-- NiFi: 8080
-- Streamlit: 8501
-
-## Quick Start
-
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.9+
-- Power BI Desktop
-- Network connectivity between PCs
-
-### Setup Instructions
-
-#### On PC 1 (Data Ingestion):
 ```bash
-# 1. Clone and navigate to project
-git clone <repository-url>
-cd ynov-pfe
-
-# 2. Set your PC1 IP in .env file
-# Edit .env and set PC1_IP=<your-ip> and PC2_IP=<friend-ip>
-
-# 3. Start PC1 services only (NiFi, Kafka, Zookeeper)
-docker-compose --profile pc1 up -d
-
-# 4. Install Python dependencies
-python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements-pc1.txt
-
-# 5. Run data simulator or NiFi
-python scripts/nifi_simulator.py
+docker compose up -d
 ```
 
-#### On PC 2 (Processing & Analytics):
+2) (Optional) Create a local Python env
+
 ```bash
-# 1. Clone the same repository
-git clone <repository-url>
-cd ynov-pfe
-
-# 2. Set IPs in .env file
-# Edit .env and set PC1_IP=<friend-ip> and PC2_IP=<your-ip>
-
-# 3. Start PC2 services only (ClickHouse, MongoDB)
-docker-compose --profile pc2 up -d
-
-# 4. Install Python dependencies
-python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-
-# 5. Run data pipeline
-python scripts/script1_kafka_to_clickhouse.py
-
-# 6. Run caching script
-python scripts/script2_clickhouse_to_mongodb.py
-
-# 7. Train ML models (daily)
-python scripts/script3_ml_training.py
-
-# 8. Launch Streamlit dashboard
-streamlit run scripts/streamlit_dashboard.py
+make venv
+make install
 ```
 
-## Project Structure
-```
-ynov-pfe/
-├── data/
-│ ├── raw/ # Original dataset
-│ └── processed/ # Processed data
-├── scripts/
-│ ├── script1_kafka_to_clickhouse.py
-│ ├── script2_clickhouse_to_mongodb.py
-│ ├── script3_ml_training.py
-│ └── streamlit_dashboard.py
-├── nifi/
-│ ├── templates/ # NiFi flow templates
-│ └── conf/ # NiFi configuration
-├── config/
-│ ├── clickhouse/ # ClickHouse schemas
-│ └── kafka/ # Kafka topics config
-├── models/ # Saved ML models
-├── notebooks/ # Jupyter notebooks for analysis
-├── docker-compose.yml # Unified Docker config (PC1 + PC2)
-├── .env.example # Environment template
-├── .env # Environment variables (not in git)
-├── requirements-pc1.txt # PC1 Python dependencies
-├── requirements.txt # PC2 Python dependencies
-├── PC1_COMPLETE_GUIDE.md # Detailed PC1 guide
-├── PC2_COMPLETE_GUIDE.md # Detailed PC2 guide
-└── README.md
-```
+3) Generate/refresh templates
 
-## Work Division
-
-### Phase 1: Setup (Week 1)
-- **PC1 Person:** NiFi flow creation, Kafka setup
-- **PC2 Person:** ClickHouse schema design, MongoDB setup
-
-### Phase 2: Data Pipeline (Week 2)
-- **PC1 Person:** Script 1 (Kafka consumer)
-- **PC2 Person:** Script 2 (Caching layer)
-
-### Phase 3: Visualization (Week 3)
-- **PC1 Person:** Streamlit real-time dashboard
-- **PC2 Person:** Power BI dashboards
-
-### Phase 4: Machine Learning (Week 4)
-- **Both:** ML implementation (divide frameworks)
- - PC1: Spark MLlib, Dask-ML
- - PC2: Scikit-learn, Performance comparison
-
-### Phase 5: Testing & Optimization (Week 5)
-- **Both:** Integration testing, performance tuning
-
-## Connection Testing
-
-### Test Network Connectivity
-From PC1:
 ```bash
-# Test ClickHouse connection
-curl http://<PC2_IP>:8123/ping
-
-# Test MongoDB connection
-mongosh mongodb://<PC2_IP>:27017
+make generate-templates
 ```
 
-From PC2:
+4) Import the NiFi flow
+
+- Import `nifi/flows/streaming_flow.json` in the NiFi UI.
+- Kafka brokers in the flow should match Docker Compose (typically `kafka:29092`).
+
+5) Run the Kafka  ClickHouse consumer
+
 ```bash
-# Test Kafka connection
-docker exec -it kafka kafka-broker-api-versions --bootstrap-server <PC1_IP>:9092
+make consumer
 ```
 
-## Troubleshooting
+6) Real-time visualization (Python / Streamlit)
 
-### Connection Issues
-1. Check firewall settings on both PCs
-2. Verify both PCs are on same network
-3. Use `ping <PC_IP>` to test basic connectivity
-4. Ensure Docker containers can access host network
+This dashboard combines:
+- ClickHouse (aggregations + latest ingested records)
+- Live Kafka messages consumed directly by the UI (buffered in-memory)
 
-### Performance Issues
-1. Monitor resource usage (CPU, RAM, disk)
-2. Adjust batch sizes in Python scripts
-3. Scale Kafka partitions if needed
-4. Use ClickHouse materialized views for aggregations
+Run locally:
 
-## Unified Docker Setup
-
-This project uses a single `docker-compose.yml` with **profiles** to separate PC1 and PC2 services:
-
-### Docker Profiles
-- **pc1 profile:** NiFi, Kafka, Zookeeper, Kafka-UI
-- **pc2 profile:** ClickHouse, MongoDB, Mongo-Express
-
-### Running Services
-
-**PC1 - Start only ingestion services:**
 ```bash
-docker-compose --profile pc1 up -d
+make streamlit
 ```
 
-**PC2 - Start only storage services:**
+Run inside the stack:
+
 ```bash
-docker-compose --profile pc2 up -d
+docker compose up -d streamlit
 ```
 
-**View running services:**
-```bash
-docker-compose ps
-```
+Then open http://localhost:8501
 
-**Stop services:**
-```bash
-docker-compose --profile pc1 down  # PC1
-docker-compose --profile pc2 down  # PC2
-```
-
-## Next Steps
-1. Review this README
-2. ⬜ Configure network settings
-3. ⬜ Set up Docker on both PCs
-4. ⬜ Configure NiFi flow
-5. ⬜ Create ClickHouse schema
-6. ⬜ Implement Python scripts
-7. ⬜ Build visualizations
-8. ⬜ Train ML models
-9. ⬜ Prepare presentation
-
-## Team Members
-- PC1 (Your Name): Data Ingestion & Streaming
-- PC2 (Friend's Name): Processing & Analytics
-
-## Presentation Tips
-- Demonstrate live data flow
-- Show real-time dashboards updating
-- Present ML model comparisons with metrics
-- Discuss scalability and improvements
-- Explain technical decisions (why ClickHouse vs MySQL)
-
-## License
-Academic Project - YNOV 2025
+**Docs**
+- docs/ARCHITECTURE.md
+- docs/RUNBOOK.md

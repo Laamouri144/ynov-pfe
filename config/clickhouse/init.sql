@@ -8,7 +8,7 @@ USE airline_data;
 
 -- Main flights table with all delay information
 CREATE TABLE IF NOT EXISTS flights (
-    id UInt64,
+    id String,
     year UInt16,
     month UInt8,
     carrier String,

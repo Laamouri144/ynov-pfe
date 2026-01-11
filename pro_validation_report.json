@@ -1,0 +1,68 @@
+{
+  "original": {
+    "total_flights": 110695124.0,
+    "total_delayed": 20699417.0,
+    "delay_rate": 0.18699483998951932,
+    "cancel_rate": 0.018188723470782688,
+    "divert_rate": 0.0021469238337905473,
+    "avg_delay_per_flight": 10.578343405622817,
+    "avg_delay_per_delayed": 56.57024229233123,
+    "unique_airports": 418.0,
+    "unique_carriers": 29.0,
+    "share_carrier_delay": 0.3152561192049106,
+    "share_weather_delay": 0.0528501110505965,
+    "share_nas_delay": 0.24637992562182676,
+    "share_security_delay": 0.0018320472614600522,
+    "share_late_aircraft_delay": 0.38368179686120607
+  },
+  "generated": {
+    "total_flights": 146621.0,
+    "total_delayed": 37878.0,
+    "delay_rate": 0.2583395284440837,
+    "cancel_rate": 0.05822494731314068,
+    "divert_rate": 0.000688850846740917,
+    "avg_delay_per_flight": 18.032069076053226,
+    "avg_delay_per_delayed": 69.79988383758382,
+    "unique_airports": 16.0,
+    "unique_carriers": 9.0,
+    "share_carrier_delay": 0.5378186604535758,
+    "share_weather_delay": 0.12542815861536832,
+    "share_nas_delay": 0.08505454105330046,
+    "share_security_delay": 0.0,
+    "share_late_aircraft_delay": 0.2516986398777554
+  },
+  "seasonality": {
+    "seasonality_months_compared": 8.0
+  },
+  "powerbi_outputs": {
+    "dim_carrier_csv": "dim_carrier.csv",
+    "dim_airport_csv": "dim_airport.csv",
+    "canonicalized_generated_csv": "generated_powerbi.csv",
+    "canonicalized_generated_ndjson": "generated_powerbi.ndjson",
+    "canonicalization_notes": [
+      "Canonicalized carrier_name for 202 rows"
+    ]
+  },
+  "generated_warnings": [
+    "GENERATED: 2 carriers have multiple carrier_name values (e.g. ['EV', 'MQ'])",
+    "GENERATED: 202 rows have carrier_name not matching canonical mapping (examples: [{'carrier': 'MQ', 'carrier_name': 'Envoy Air', 'carrier_name_expected': 'American Eagle Airlines Inc.'}, {'carrier': 'EV', 'carrier_name': 'Atlantic Southeast Airlines', 'carrier_name_expected': 'ExpressJet Airlines Inc.'}])",
+    "KPI delay_rate: generated=0.2583 vs original=0.1870 (abs diff=0.0713 > 0.02)",
+    "KPI cancel_rate: generated=0.0582 vs original=0.0182 (abs diff=0.0400 > 0.01)",
+    "KPI avg_delay_per_flight: generated=18.0321 vs original=10.5783 (abs diff=7.4537 > 2.0)",
+    "Low airport coverage in generated: 16",
+    "Low carrier coverage in generated: 9",
+    "Monthly seasonality check: only 8/12 months comparable; correlation may be unreliable"
+  ],
+  "status": "PASS_WITH_WARNINGS",
+  "reference_notes": [
+    "Filled 7593 numeric nulls with 0 in ORIGINAL",
+    "Clipped 3 negative numeric values to 0 in ORIGINAL",
+    "ORIGINAL: Nulls in required columns: {'carrier': 4, 'carrier_name': 4, 'airport': 3}",
+    "ORIGINAL: 493 records have arr_flights <= 0",
+    "ORIGINAL: 5 records have arr_del15 > arr_flights",
+    "ORIGINAL: 1137 records have arr_delay > 100000",
+    "ORIGINAL: 4 records have nas_ct > arr_del15",
+    "ORIGINAL: 3 records have late_aircraft_ct > arr_del15",
+    "ORIGINAL: 9 records have delay sum mismatch > 1 minute"
+  ]
+}
