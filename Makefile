@@ -1,4 +1,4 @@
-.PHONY: help venv install generate-templates consumer streamlit
+.PHONY: help venv install generate-templates consumer streamlit clean clean-docker
 
 PY?=python3
 VENV?=.venv
@@ -11,6 +11,8 @@ help:
 	@echo "  generate-templates Generate data/Nifi_Templates_1500.csv"
 	@echo "  consumer          Run Kafka->ClickHouse consumer"
 	@echo "  streamlit         Run real-time Streamlit dashboard"
+	@echo "  clean             Remove local envs/caches/logs"
+	@echo "  clean-docker       Stop stack (keeps volumes)"
 
 venv:
 	$(PY) -m venv $(VENV)
@@ -28,3 +30,11 @@ consumer:
 
 streamlit:
 	$(PYTHON) -m streamlit run visualization/realtime_app.py --server.port 8501 --server.address 0.0.0.0
+
+clean:
+	rm -rf .venv .venv-consumer .pytest_cache
+	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
+	rm -f logs/*.log
+
+clean-docker:
+	docker compose down
